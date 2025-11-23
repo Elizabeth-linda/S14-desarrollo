@@ -8,13 +8,18 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const passport = require('./config/passport'); // ⬅️ INTEGRACIÓN OAUTH
 
-// Cargar variables de entorno
-dotenv.config();
+// Cargar variables de entorno (solo en desarrollo local)
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
+
 console.log('⚠️ DEBUG ENV:');
-console.log('CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-console.log('CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'OK' : 'EMPTY');
-console.log('CALLBACK:', process.env.GOOGLE_CALLBACK_URL);
-console.log('MONGO:', process.env.MONGODB_URI ? 'OK' : 'EMPTY');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
+console.log('CLIENT_ID:', process.env.GOOGLE_CLIENT_ID || 'MISSING');
+console.log('CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'OK' : 'MISSING');
+console.log('CALLBACK:', process.env.GOOGLE_CALLBACK_URL || 'MISSING');
+console.log('MONGO:', process.env.MONGODB_URI || 'MISSING');
+console.log('PORT:', process.env.PORT || '5000');
 
 // Rutas
 const authRoutes = require('./routes/auth');
@@ -57,17 +62,35 @@ app.get('/health', async (req, res) => {
   const dbState = mongoose.connection.readyState; 
   res
     .status(dbState === 1 ? 200 : 503)
-    .json({ status: dbState === 1 ? 'ok' : 'down', dbState });
+    .json({ 
+      status: dbState === 1 ? 'ok' : 'down', 
+      dbState,
+      env: process.env.NODE_ENV || 'development'
+    });
 });
 
 // Conexión robusta a MongoDB
 const connectWithRetry = () => {
+  const mongoUri = process.env.MONGODB_URI;
+  
+  if (!mongoUri) {
+    console.error('❌ ERROR CRÍTICO: MONGODB_URI no está definida en las variables de entorno');
+    console.log('Reintentando en 5 segundos...');
+    setTimeout(connectWithRetry, 5000);
+    return;
+  }
+
+  console.log('🔄 Intentando conectar a MongoDB...');
+  
   mongoose
-    .connect(process.env.MONGODB_URI, {
+    .connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     })
-    .then(() => console.log('✅ Conectado a MongoDB'))
+    .then(() => {
+      console.log('✅ Conectado a MongoDB exitosamente');
+      console.log('📊 Base de datos:', mongoose.connection.name);
+    })
     .catch((err) => {
       console.error('❌ Error conectando a MongoDB:', err.message || err);
       console.log('Reintentando conexión en 5 segundos...');
@@ -82,6 +105,7 @@ app.get('/', (req, res) => {
   res.json({
     message: '🚀 API de Desarrollo Web - UNEMI',
     version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -93,6 +117,7 @@ app.use('/api/users', userRoutes);
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
 });
 
 // Manejo de cierre ordenado

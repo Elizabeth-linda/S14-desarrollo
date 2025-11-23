@@ -1,5 +1,7 @@
 // backend/config/passport.js
-require('dotenv').config(); // asegurar carga de .env
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
